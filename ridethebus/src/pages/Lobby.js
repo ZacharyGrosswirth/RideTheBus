@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSocket } from "../hooks/socketContext";
 
 const Lobby = () => {
   const navigate = useNavigate();
+  const socket = useSocket();
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
 
-  const [passcode, setPasscode] = useState("");
+  const [name, setName] = useState("");
   const [maxPlayers, setMaxPlayers] = useState(4);
+  const [passcode, setPasscode] = useState("");
   const [roomCode, setRoomCode] = useState("");
   const [password, setPassword] = useState("");
 
@@ -18,22 +21,56 @@ const Lobby = () => {
   const closeJoin = () => setShowJoin(false);
 
   const handleCreate = () => {
-    // TODO: creation logic
-    console.log({ passcode, maxPlayers });
+    if (!name.trim()) return alert("Enter your name!");
+    socket.emit(
+      "createRoom",
+      {
+        name,
+        maxPlayers: Number(maxPlayers),
+        password: passcode.trim().toUpperCase(),
+      },
+      (res) => {
+        if (res.status === "ok") {
+          navigate(`/game/${res.room}`, { state: { name, password: passcode.trim().toUpperCase() } });
+        } else {
+          alert(res.message);
+        }
+      }
+    );
+
+    console.log({ name, maxPlayers, passcode });
     closeCreate();
-    navigate("/create", { state: { passcode, maxPlayers } });
   };
 
   const handleJoin = () => {
-    // TODO: join logic
-    console.log({ roomCode, password });
+    if (!name.trim()) return alert("Enter your name!");
+    socket.emit(
+      "joinRoom",
+      { name, room: roomCode.trim().toUpperCase(), password: password.trim().toUpperCase() },
+      (res) => {
+        if (res.status === "ok") {
+          navigate(`/game/${res.room}`, { state: { name, password } });
+        } else {
+          alert(res.message);
+        }
+      }
+    );
+
+    console.log({ name, roomCode, password });
     closeJoin();
-    navigate("/join", { state: { roomCode, password } });
   };
 
   return (
     <div style={styles.lobbyContainer}>
       <h1>Ride The Bus</h1>
+      <div style={styles.field}>
+        <label>Enter Name:</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </div>
       <div style={styles.buttonGroup}>
         <button style={styles.button} onClick={openCreate}>
           Create Game
