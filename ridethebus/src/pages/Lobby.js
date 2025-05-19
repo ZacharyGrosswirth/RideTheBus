@@ -1,10 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSocket } from "../hooks/socketContext";
+import { useSocket } from "../utils/socketContext";
+import { joinRoom, createRoom } from "../utils/helpFunctions"
+import { getOrCreateUser, clearUser } from "../utils/session";;
 
 const Lobby = () => {
   const navigate = useNavigate();
   const socket = useSocket();
+
+  const [loading, setLoading] = useState(true);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showJoin, setShowJoin] = useState(false);
@@ -20,41 +24,55 @@ const Lobby = () => {
   const openJoin = () => setShowJoin(true);
   const closeJoin = () => setShowJoin(false);
 
-  const handleCreate = () => {
-    if (!name.trim()) return alert("Enter your name!");
-    socket.emit(
-      "createRoom",
-      {
-        name,
-        maxPlayers: Number(maxPlayers),
-        password: passcode.trim().toUpperCase(),
-      },
-      (res) => {
-        if (res.status === "ok") {
-          navigate(`/game/${res.room}`, { state: { name, password: passcode.trim().toUpperCase() } });
-        } else {
-          alert(res.message);
-        }
-      }
-    );
+  useEffect(() => {
+    const user = getOrCreateUser();
+    if (user.roomCode && user.name && user.passcode) {
+      joinRoom(socket, {
+        name:     user.name,
+        roomCode: user.roomCode,
+        passcode: user.passcode,
+      })
+        .then((res) => {
+          if (res.roomState?.gameStarted) {
+            navigate(`/game/${user.roomCode}`);
+          } else {
+            navigate(`/waiting/${user.roomCode}`);
+          }
+        })
+        .catch(() => {
+          clearUser();
+          setLoading(false);
+        });
+    } else {
+      setLoading(false);
+    }
+  }, [socket, navigate]);
 
-    console.log({ name, maxPlayers, passcode });
+  if (loading) {
+    return <div>Checking for existing game…</div>;
+  }
+
+  const handleCreate = async () => {
+    if (!name.trim()) return alert("Enter your name!");
+
+    try {
+      const { room } = await createRoom(socket, { name, maxPlayers, passcode });
+      navigate(`/waiting/${room}`);
+    } catch (err) {
+      alert(err.message);
+    }
     closeCreate();
   };
 
-  const handleJoin = () => {
+  const handleJoin = async () => {
     if (!name.trim()) return alert("Enter your name!");
-    socket.emit(
-      "joinRoom",
-      { name, room: roomCode.trim().toUpperCase(), password: password.trim().toUpperCase() },
-      (res) => {
-        if (res.status === "ok") {
-          navigate(`/game/${res.room}`, { state: { name, password } });
-        } else {
-          alert(res.message);
-        }
-      }
-    );
+
+    try {
+      const { room } = await joinRoom(socket, { name, roomCode, passcode });
+      navigate(`/waiting/${room}`, { state: { name, passcode } });
+    } catch (err) {
+      alert(err.message);
+    }
 
     console.log({ name, roomCode, password });
     closeJoin();

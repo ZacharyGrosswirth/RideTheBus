@@ -163,3 +163,5 @@ yarn-error.log*
 
 # Environment files (local configs)
 /.env.*
+
+ridethebus/src/utils/firebaseConfig.js
